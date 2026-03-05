@@ -51,8 +51,9 @@ def main():
     if results_path.stat().st_size == 0:
         writer.writeheader()
 
-    # Buscar todos los CSVs de Consensus en el directorio
-    csv_files = sorted(base_dir.glob("*_consensus.csv"))
+    # Buscar todos los CSVs de Consensus en el directorio data/
+    data_dir = base_dir / "data"
+    csv_files = sorted(data_dir.glob("*_consensus.csv"))
     csv_files = [f for f in csv_files if f.suffix == ".csv"]
 
     if args.csv:
