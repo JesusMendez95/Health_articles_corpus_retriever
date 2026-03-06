@@ -9,8 +9,7 @@ __pycache__/
 *$py.class
 
 # Downloads and Outputs
-downloads/
-retriever.log
+
 
 # Mac OS
 .DS_Store

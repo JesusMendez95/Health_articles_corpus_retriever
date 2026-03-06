@@ -1,10 +1,11 @@
 """
 Article Retriever — Orquestador principal
 =========================================
-Cascada de 3 fuentes por DOI:
+Cascada de 4 fuentes por DOI:
   1. Unpaywall API  → PDF completo (Open Access)
-  2. Anna's Archive → PDF completo
-  3. Consensus Pro  → Study Snapshot en CSV (cuando no hay PDF)
+  2. PubMed/PMC    → PDF completo Open Access via OA API
+  3. Sci-Hub        → PDF completo (respaldo)
+  4. Consensus Pro  → Study Snapshot en CSV (cuando no hay PDF)
 
 Uso:
     python retriever.py                     # Procesa todos los CSVs
@@ -21,7 +22,7 @@ from pathlib import Path
 
 import config
 import utils
-from sources import unpaywall, annas_archive, consensus
+from sources import unpaywall, pubmed, scihub, consensus
 
 
 # ── Columnas del CSV de resultados ────────────────────────────────────────────
@@ -29,7 +30,7 @@ RESULT_COLS = [
     "Topic", "Title", "Authors", "Year", "DOI",
     "Journal", "Study_Type", "Citations",
     "Abstract", "Study_Snapshot",
-    "PDF_Path", "PDF_Source", "Status", "Status_Reason",
+    "PDF_Path", "PDF_Source", "TXT_Path", "Status", "Status_Reason",
     "Consensus_Link",
 ]
 
@@ -104,14 +105,16 @@ def main():
                                  reason="Sin DOI")
                     continue
 
+                abstract = art.get("Abstract", "").strip()
                 result = process_article(
-                    doi, title, url, dest_dir,
+                    doi, title, abstract, url, dest_dir,
                     skip_consensus=args.skip_consensus
                 )
                 write_result(writer, art, topic,
                              pdf_path=result.get("pdf_path"),
                              pdf_source=result.get("source"),
                              study_snapshot=result.get("study_snapshot"),
+                             txt_path=result.get("txt_path"),
                              status=result["status"],
                              reason=result.get("reason", ""))
                 results_file.flush()
@@ -153,39 +156,46 @@ def main():
     print()
 
 
-def process_article(doi: str, title: str, consensus_url: str,
+def process_article(doi: str, title: str, abstract: str, consensus_url: str,
                     dest_dir: Path, skip_consensus: bool = False) -> dict:
     """
-    Ejecuta la cascada de 3 fuentes para un artículo.
+    Ejecuta la cascada de 4 fuentes para un artículo.
     """
     # ── 1. Unpaywall ──────────────────────────────────────────────────────────
     if config.UNPAYWALL_EMAIL:
         result = unpaywall.fetch(doi, title, dest_dir)
         if result["success"]:
-            return {**result, "status": "pdf_downloaded", "study_snapshot": None}
+            return {**result, "status": "pdf_downloaded", "study_snapshot": None, "txt_path": None}
 
-    # ── 2. Anna's Archive ─────────────────────────────────────────────────────
-    result = annas_archive.fetch(doi, title, dest_dir)
+    # ── 2. PubMed/PMC ─────────────────────────────────────────────────────────
+    result = pubmed.fetch(doi, title, dest_dir)
     if result["success"]:
-        return {**result, "status": "pdf_downloaded", "study_snapshot": None}
+        return {**result, "status": "pdf_downloaded", "study_snapshot": None, "txt_path": None}
 
-    # ── 3. Consensus (Study Snapshot fallback) ────────────────────────────────
+    # ── 3. Sci-Hub ────────────────────────────────────────────────────────────
+    result = scihub.fetch(doi, title, dest_dir)
+    if result["success"]:
+        return {**result, "status": "pdf_downloaded", "study_snapshot": None, "txt_path": None}
+
+    # ── 4. Consensus (fallback: título + abstract + snapshot en .txt) ─────────
     if skip_consensus or not consensus_url:
         return {"status": "not_found", "pdf_path": None, "source": None,
-                "study_snapshot": None, "reason": "No disponible en ninguna fuente"}
+                "study_snapshot": None, "txt_path": None,
+                "reason": "No disponible en ninguna fuente"}
 
-    snap_result = consensus.get_study_snapshot(consensus_url)
+    snap_result = consensus.get_study_snapshot(consensus_url, title, abstract, dest_dir)
     if snap_result["success"]:
         return {
             "status": "snapshot_only",
             "pdf_path": None,
             "source": "consensus",
             "study_snapshot": snap_result["study_snapshot"],
+            "txt_path": snap_result.get("txt_path"),
         }
 
     return {"status": "not_found", "pdf_path": None, "source": None,
-            "study_snapshot": None,
-            "reason": f"Unpaywall+Anna's+Consensus fallaron: {snap_result.get('reason','')}"}
+            "study_snapshot": None, "txt_path": None,
+            "reason": f"Todas las fuentes fallaron: {snap_result.get('reason', '')}"}
 
 
 def read_csv(path: Path) -> list[dict]:
@@ -195,7 +205,7 @@ def read_csv(path: Path) -> list[dict]:
 
 
 def write_result(writer, art: dict, topic: str, pdf_path=None,
-                 pdf_source=None, study_snapshot=None,
+                 pdf_source=None, study_snapshot=None, txt_path=None,
                  status="not_found", reason=""):
     """Escribe una fila en el CSV de resultados."""
     writer.writerow({
@@ -211,6 +221,7 @@ def write_result(writer, art: dict, topic: str, pdf_path=None,
         "Study_Snapshot": study_snapshot or "",
         "PDF_Path":       pdf_path or "",
         "PDF_Source":     pdf_source or "",
+        "TXT_Path":       txt_path or "",
         "Status":         status,
         "Status_Reason":  reason,
         "Consensus_Link": art.get("Consensus Link", ""),

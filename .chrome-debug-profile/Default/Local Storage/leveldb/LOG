@@ -1,0 +1,57 @@
+2026/03/05-18:24:50.202 5 Reusing MANIFEST /home/vincent-ubuntu/Documents/programming/Health_articles_corpus_retriever/.chrome-debug-profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/05-18:24:50.208 5 Recovering log #3
+2026/03/05-18:24:50.209 5 Reusing old log /home/vincent-ubuntu/Documents/programming/Health_articles_corpus_retriever/.chrome-debug-profile/Default/Local Storage/leveldb/000003.log 
+2026/03/05-18:33:16.696 7 Level-0 table #5: started
+2026/03/05-18:33:16.703 7 Level-0 table #5: 19943 bytes OK
+2026/03/05-18:33:16.707 7 Delete type=0 #3
+2026/03/05-18:41:51.367 7 Level-0 table #7: started
+2026/03/05-18:41:51.373 7 Level-0 table #7: 22249 bytes OK
+2026/03/05-18:41:51.378 7 Delete type=0 #4
+2026/03/05-18:47:51.367 7 Level-0 table #9: started
+2026/03/05-18:47:51.373 7 Level-0 table #9: 21815 bytes OK
+2026/03/05-18:47:51.379 7 Delete type=0 #6
+2026/03/05-18:52:57.207 7 Level-0 table #11: started
+2026/03/05-18:52:57.213 7 Level-0 table #11: 24766 bytes OK
+2026/03/05-18:52:57.217 7 Delete type=0 #8
+2026/03/05-19:01:51.367 7 Level-0 table #13: started
+2026/03/05-19:01:51.373 7 Level-0 table #13: 22781 bytes OK
+2026/03/05-19:01:51.378 7 Delete type=0 #10
+2026/03/05-19:11:18.783 7 Level-0 table #15: started
+2026/03/05-19:11:18.790 7 Level-0 table #15: 22540 bytes OK
+2026/03/05-19:11:18.795 7 Delete type=0 #12
+2026/03/05-19:11:18.796 7 Compacting 4@0 + 1@1 files
+2026/03/05-19:11:18.801 7 Generated table #16@0: 181 keys, 6769 bytes
+2026/03/05-19:11:18.802 7 Compacted 4@0 + 1@1 files => 6769 bytes
+2026/03/05-19:11:18.804 7 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/03/05-19:11:18.806 7 Delete type=2 #11
+2026/03/05-19:11:18.807 7 Delete type=2 #15
+2026/03/05-19:11:18.807 7 Delete type=2 #13
+2026/03/05-19:11:18.807 7 Delete type=2 #9
+2026/03/05-19:11:18.807 7 Delete type=2 #7
+2026/03/05-19:14:51.367 7 Level-0 table #18: started
+2026/03/05-19:14:51.373 7 Level-0 table #18: 23483 bytes OK
+2026/03/05-19:14:51.378 7 Delete type=0 #14
+2026/03/05-19:21:51.367 7 Level-0 table #20: started
+2026/03/05-19:21:51.373 7 Level-0 table #20: 21610 bytes OK
+2026/03/05-19:21:51.378 7 Delete type=0 #17
+2026/03/05-19:26:51.367 7 Level-0 table #22: started
+2026/03/05-19:26:51.374 7 Level-0 table #22: 21126 bytes OK
+2026/03/05-19:26:51.379 7 Delete type=0 #19
+2026/03/05-19:31:45.274 7 Level-0 table #24: started
+2026/03/05-19:31:45.280 7 Level-0 table #24: 21799 bytes OK
+2026/03/05-19:31:45.285 7 Delete type=0 #21
+2026/03/05-19:31:45.286 7 Compacting 4@0 + 1@1 files
+2026/03/05-19:31:45.291 7 Generated table #25@0: 314 keys, 8674 bytes
+2026/03/05-19:31:45.291 7 Compacted 4@0 + 1@1 files => 8674 bytes
+2026/03/05-19:31:45.294 7 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/03/05-19:31:45.296 7 Delete type=2 #18
+2026/03/05-19:31:45.296 7 Delete type=2 #20
+2026/03/05-19:31:45.296 7 Delete type=2 #22
+2026/03/05-19:31:45.297 7 Delete type=2 #24
+2026/03/05-19:31:45.297 7 Delete type=2 #16
+2026/03/05-19:36:51.367 7 Level-0 table #27: started
+2026/03/05-19:36:51.373 7 Level-0 table #27: 21847 bytes OK
+2026/03/05-19:36:51.379 7 Delete type=0 #23
+2026/03/05-20:00:51.367 5 Level-0 table #29: started
+2026/03/05-20:00:51.373 5 Level-0 table #29: 19207 bytes OK
+2026/03/05-20:00:51.378 5 Delete type=0 #26

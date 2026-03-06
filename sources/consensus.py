@@ -1,10 +1,16 @@
 """
-Consensus source: usa Playwright para iniciar sesión con cuenta Pro y extraer
-el Study Snapshot de cada artículo cuando no se pudo descargar el PDF.
+Consensus source: extrae Title, Abstract y Study Snapshot de artículos.
+
+Se conecta al Chrome real del usuario vía CDP (Chrome DevTools Protocol),
+abre una pestaña nueva, navega a la URL del artículo en Consensus y
+extrae el contenido. El resultado se guarda en un .txt.
+
+Requisito único: Chrome debe estar corriendo con remote debugging:
+    ./start_chrome_debug.sh
 """
 import time
-import config
-from utils import log
+from pathlib import Path
+from utils import sanitize_filename, log
 
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
@@ -12,70 +18,102 @@ try:
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
+CDP_URL = "http://localhost:9222"
 
-_browser_context = None  # Contexto reutilizable entre llamadas
 
-
-def get_study_snapshot(consensus_url: str) -> dict:
+def get_study_snapshot(consensus_url: str, title: str, abstract: str, dest_dir: Path) -> dict:
     """
-    Visita la página del artículo en Consensus (con sesión Pro activa)
-    y extrae el Study Snapshot.
+    Abre una pestaña en el Chrome del usuario, navega a la URL de Consensus
+    y extrae el Study Snapshot. Guarda título + abstract + snapshot en un .txt.
 
     Returns:
-        dict con: success (bool), study_snapshot (str|None), reason (str)
+        dict con: success (bool), txt_path (str|None), study_snapshot (str|None), reason (str)
     """
     if not PLAYWRIGHT_AVAILABLE:
-        return {"success": False, "study_snapshot": None,
-                "reason": "playwright no instalado"}
-
-    if not config.CONSENSUS_EMAIL or not config.CONSENSUS_PASSWORD:
-        return {"success": False, "study_snapshot": None,
-                "reason": "Credenciales de Consensus no configuradas"}
+        return _fail("playwright no instalado")
 
     if not consensus_url:
-        return {"success": False, "study_snapshot": None,
-                "reason": "URL de Consensus vacía"}
+        return _fail("URL de Consensus vacía")
+
+    page = None
+    pw = None
+    browser = None
 
     try:
-        context = _get_context()
-        page = context.new_page()
-        page.goto(consensus_url, wait_until="domcontentloaded", timeout=30000)
+        pw = sync_playwright().start()
+        browser = pw.chromium.connect_over_cdp(CDP_URL)
+    except Exception as e:
+        if pw:
+            try:
+                pw.stop()
+            except Exception:
+                pass
+        return _fail(f"Chrome no disponible en {CDP_URL}. Ejecuta ./start_chrome_debug.sh  ({e})")
 
-        # Esperar a que cargue el contenido principal
+    try:
+        # Usar el primer contexto del Chrome real (ya tiene la sesión activa)
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = context.new_page()
+
+        page.goto(consensus_url, wait_until="domcontentloaded", timeout=30000)
+        time.sleep(3)
+
+        # Esperar a que cargue el contenido del artículo
         try:
-            page.wait_for_selector("[data-testid='study-snapshot'], .study-snapshot, "
-                                   "[class*='StudySnapshot'], [class*='study_snapshot']",
-                                   timeout=10000)
+            page.wait_for_selector(
+                "[data-testid='study-snapshot'], [class*='StudySnapshot'], "
+                "[class*='study-snapshot'], [class*='study_snapshot']",
+                timeout=12000,
+            )
         except PwTimeout:
-            # Intentar selector más genérico si el anterior no funciona
             pass
 
         snapshot = _extract_snapshot(page)
+        page_title = _extract_title(page) or title
+        page_abstract = _extract_abstract(page) or abstract
+
         page.close()
 
-        if snapshot:
-            return {"success": True, "study_snapshot": snapshot}
-        else:
-            return {"success": False, "study_snapshot": None,
-                    "reason": "Study Snapshot no encontrado en la página"}
+        if not snapshot:
+            return _fail("Study Snapshot no encontrado en la página de Consensus")
+
+        txt_path = _write_txt(page_title, page_abstract, snapshot, dest_dir, title)
+        log(f"  ✅ Consensus snapshot: {txt_path.name}")
+        return {
+            "success": True,
+            "txt_path": str(txt_path),
+            "study_snapshot": snapshot,
+            "reason": "",
+        }
 
     except Exception as e:
         log(f"  Consensus error: {e}")
-        return {"success": False, "study_snapshot": None, "reason": str(e)}
+        if page:
+            try:
+                page.close()
+            except Exception:
+                pass
+        return _fail(str(e))
+    finally:
+        try:
+            browser.close()
+        except Exception:
+            pass
+        try:
+            pw.stop()
+        except Exception:
+            pass
 
+
+# ── Extracción de contenido ────────────────────────────────────────────────────
 
 def _extract_snapshot(page) -> str | None:
-    """Intenta extraer el Study Snapshot probando varios selectores."""
-    # Selectores conocidos de Consensus (pueden variar con updates del sitio)
     selectors = [
         "[data-testid='study-snapshot']",
         "[class*='StudySnapshot']",
         "[class*='study-snapshot']",
         "[class*='study_snapshot']",
-        "section:has(h2:text('Study Snapshot'))",
-        "div:has(> h3:text-is('Study Snapshot'))",
     ]
-
     for sel in selectors:
         try:
             el = page.query_selector(sel)
@@ -86,14 +124,16 @@ def _extract_snapshot(page) -> str | None:
         except Exception:
             continue
 
-    # Fallback: buscar texto que contenga encabezado "Study Snapshot"
+    # Fallback: buscar por encabezado "Study Snapshot"
     try:
         result = page.evaluate("""
             () => {
                 const headers = [...document.querySelectorAll('h1,h2,h3,h4,strong')];
-                const header = headers.find(h => h.textContent.trim().toLowerCase().includes('study snapshot'));
+                const header = headers.find(h =>
+                    h.textContent.trim().toLowerCase().includes('study snapshot'));
                 if (!header) return null;
-                const parent = header.closest('section, div[class], article') || header.parentElement;
+                const parent = header.closest('section, div[class], article')
+                             || header.parentElement;
                 return parent ? parent.innerText.trim() : null;
             }
         """)
@@ -101,78 +141,58 @@ def _extract_snapshot(page) -> str | None:
             return result
     except Exception:
         pass
-
     return None
 
 
-def _get_context():
-    """Obtiene o crea el contexto del navegador con sesión iniciada."""
-    global _browser_context
-
-    if _browser_context is not None:
-        return _browser_context
-
-    # Iniciar navegador y hacer login
-    pw = sync_playwright().start()
-    browser = pw.chromium.launch(headless=True)
-    context = browser.new_context(
-        viewport={"width": 1280, "height": 900},
-        user_agent=(
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
-    )
-
-    _login(context)
-    _browser_context = context
-    return context
-
-
-def _login(context):
-    """Inicia sesión en Consensus con las credenciales del .env."""
-    page = context.new_page()
-    log("  🔐 Iniciando sesión en Consensus...")
-
+def _extract_title(page) -> str | None:
     try:
-        page.goto("https://consensus.app/home/", wait_until="domcontentloaded", timeout=30000)
-        time.sleep(2)
+        el = page.query_selector("h1, [class*='title'], [data-testid='paper-title']")
+        if el:
+            t = el.inner_text().strip()
+            if t and len(t) > 5:
+                return t
+    except Exception:
+        pass
+    return None
 
-        # Intentar hacer click en botón de login
-        login_selectors = [
-            "a[href*='login']", "button:text('Log in')", "button:text('Sign in')",
-            "[data-testid='login-button']"
-        ]
-        for sel in login_selectors:
-            try:
-                page.click(sel, timeout=3000)
-                break
-            except Exception:
-                continue
 
-        time.sleep(2)
+def _extract_abstract(page) -> str | None:
+    try:
+        result = page.evaluate("""
+            () => {
+                const headers = [...document.querySelectorAll('h2,h3,h4,strong')];
+                const h = headers.find(el =>
+                    el.textContent.trim().toLowerCase() === 'abstract');
+                if (!h) return null;
+                const parent = h.closest('section, div[class]') || h.parentElement;
+                return parent ? parent.innerText.trim() : null;
+            }
+        """)
+        if result and len(result) > 20:
+            return result
+    except Exception:
+        pass
+    return None
 
-        # Rellenar email y contraseña
-        page.fill("input[type='email'], input[name='email']", config.CONSENSUS_EMAIL)
-        page.fill("input[type='password'], input[name='password']", config.CONSENSUS_PASSWORD)
 
-        # Submit
-        page.press("input[type='password']", "Enter")
-        time.sleep(3)
+# ── Escritura del .txt ─────────────────────────────────────────────────────────
 
-        log("  ✅ Sesión iniciada en Consensus")
+def _write_txt(title: str, abstract: str, snapshot: str, dest_dir: Path, fallback_name: str) -> Path:
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    filename = sanitize_filename(title or fallback_name) + ".txt"
+    path = dest_dir / filename
+    content = f"TITLE\n{'='*60}\n{title}\n\n"
+    if abstract:
+        content += f"ABSTRACT\n{'='*60}\n{abstract}\n\n"
+    content += f"STUDY SNAPSHOT\n{'='*60}\n{snapshot}\n"
+    path.write_text(content, encoding="utf-8")
+    return path
 
-    except Exception as e:
-        log(f"  ⚠️  Error al iniciar sesión en Consensus: {e}")
-    finally:
-        page.close()
+
+def _fail(reason: str) -> dict:
+    return {"success": False, "txt_path": None, "study_snapshot": None, "reason": reason}
 
 
 def close():
-    """Cierra el navegador al finalizar."""
-    global _browser_context
-    if _browser_context:
-        try:
-            _browser_context.browser.close()
-        except Exception:
-            pass
-        _browser_context = None
+    """Sin-op: ya no mantenemos un browser persistente."""
+    pass
