@@ -9,7 +9,17 @@ __pycache__/
 *$py.class
 
 # Downloads and Outputs
+downloads/
+results.csv
+results.csv.bak
 
+# Logs and runtime files
+retriever.log
+run_full.log
+.retriever.pid
+
+# Chrome debug profile
+.chrome-debug-profile/
 
 # Mac OS
 .DS_Store
