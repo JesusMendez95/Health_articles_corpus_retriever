@@ -2,6 +2,14 @@
 
 A Python tool that automatically downloads PDF versions of scientific articles from multiple open-access and fallback sources. Designed to process exports from [Consensus](https://consensus.app), it implements a 4-source cascade to maximize retrieval rate.
 
+## Dataset
+
+The full article corpus (PDFs and metadata) is too large to host on GitHub and is available on HuggingFace:
+
+**[Multidisciplinary Health Articles Dataset](https://huggingface.co/datasets/Chus010895/multidisciplinary-health-articles/tree/main)**
+
+The dataset includes all downloaded PDFs organized by topic, along with the `results.csv` metadata index.
+
 ## Results
 
 See [CORPUS_SUMMARY.md](CORPUS_SUMMARY.md) for full statistics on the downloaded corpus.
